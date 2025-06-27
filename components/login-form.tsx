@@ -39,7 +39,7 @@ export function LoginForm({
       });
       if (error) throw error;
       // Update this route to redirect to an authenticated route. The user already has an active session.
-      router.push("/protected");
+      router.push("/home");
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred");
     } finally {
@@ -48,63 +48,70 @@ export function LoginForm({
   };
 
   return (
-    <div className={cn("flex flex-col gap-6", className)} {...props}>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">Login</CardTitle>
-          <CardDescription>
-            Enter your email below to login to your account
+    <div className={cn("flex flex-col gap-6 rtl", className)} dir="rtl" {...props}>
+      <Card className="max-w-md w-full mx-auto shadow-md">
+        <CardHeader className="text-right">
+          <CardTitle className="text-2xl font-bold text-blue-700">تسجيل الدخول</CardTitle>
+          <CardDescription className="text-sm text-gray-600">
+            أدخل بريدك الإلكتروني وكلمة المرور لتسجيل الدخول إلى حسابك
           </CardDescription>
         </CardHeader>
+  
         <CardContent>
-          <form onSubmit={handleLogin}>
-            <div className="flex flex-col gap-6">
-              <div className="grid gap-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="m@example.com"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-              <div className="grid gap-2">
-                <div className="flex items-center">
-                  <Label htmlFor="password">Password</Label>
-                  <Link
-                    href="/auth/forgot-password"
-                    className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
-                  >
-                    Forgot your password?
-                  </Link>
-                </div>
-                <Input
-                  id="password"
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
-              {error && <p className="text-sm text-red-500">{error}</p>}
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Logging in..." : "Login"}
-              </Button>
+          <form onSubmit={handleLogin} className="space-y-6">
+            {/* Email Field */}
+            <div className="grid gap-2 text-right">
+              <Label htmlFor="email">البريد الإلكتروني</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="text-right"
+              />
             </div>
-            <div className="mt-4 text-center text-sm">
-              Don&apos;t have an account?{" "}
-              <Link
-                href="/auth/sign-up"
-                className="underline underline-offset-4"
-              >
-                Sign up
+  
+            {/* Password Field */}
+            <div className="grid gap-2 text-right">
+              <div className="flex justify-between items-center">
+                <Label htmlFor="password">كلمة المرور</Label>
+                <Link
+                  href="/auth/forgot-password"
+                  className="text-sm text-blue-600 hover:underline"
+                >
+                  نسيت كلمة المرور؟
+                </Link>
+              </div>
+              <Input
+                id="password"
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="text-right"
+              />
+            </div>
+  
+            {/* Error Message */}
+            {error && <p className="text-sm text-red-500 text-right">{error}</p>}
+  
+            {/* Submit Button */}
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? "جارٍ تسجيل الدخول..." : "تسجيل الدخول"}
+            </Button>
+  
+            {/* Sign Up Link */}
+            <p className="text-sm text-center text-gray-600">
+              ليس لديك حساب؟{" "}
+              <Link href="/auth/sign-up" className="text-blue-600 hover:underline">
+                إنشاء حساب جديد
               </Link>
-            </div>
+            </p>
           </form>
         </CardContent>
       </Card>
     </div>
   );
-}
+  

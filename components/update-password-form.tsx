@@ -41,38 +41,46 @@ export function UpdatePasswordForm({
       setIsLoading(false);
     }
   };
-
   return (
-    <div className={cn("flex flex-col gap-6", className)} {...props}>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">Reset Your Password</CardTitle>
-          <CardDescription>
-            Please enter your new password below.
+    <div className={cn("flex flex-col gap-6 rtl", className)} dir="rtl" {...props}>
+      <Card className="max-w-md w-full mx-auto shadow-md">
+        <CardHeader className="text-right">
+          <CardTitle className="text-2xl font-bold text-blue-700">
+            إعادة تعيين كلمة المرور
+          </CardTitle>
+          <CardDescription className="text-sm text-gray-600">
+            يرجى إدخال كلمة مرور جديدة أدناه
           </CardDescription>
         </CardHeader>
+  
         <CardContent>
-          <form onSubmit={handleForgotPassword}>
-            <div className="flex flex-col gap-6">
-              <div className="grid gap-2">
-                <Label htmlFor="password">New password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="New password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
-              {error && <p className="text-sm text-red-500">{error}</p>}
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Saving..." : "Save new password"}
-              </Button>
+          <form onSubmit={handleForgotPassword} className="space-y-6">
+            {/* New Password */}
+            <div className="grid gap-2 text-right">
+              <Label htmlFor="password">كلمة المرور الجديدة</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="كلمة المرور الجديدة"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="text-right"
+              />
             </div>
+  
+            {/* Error Message */}
+            {error && (
+              <p className="text-sm text-red-500 text-right">{error}</p>
+            )}
+  
+            {/* Submit Button */}
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? "جارٍ الحفظ..." : "حفظ كلمة المرور الجديدة"}
+            </Button>
           </form>
         </CardContent>
       </Card>
     </div>
   );
-}
+  
