@@ -31,7 +31,6 @@ interface Payment {
   payments_entries?: PaymentEntry[];
 }
 
-
 export default function TaxReportPage() {
   const supabase = createClient();
 
@@ -72,7 +71,11 @@ export default function TaxReportPage() {
   };
 
   const fetchReportData = async () => {
-    if (!month || !office?.id) return;
+    if (!month || !office?.id) {
+      setData([]);
+      setTaxValues({});
+      return;
+    }
     setLoading(true);
     setErrorMsg('');
 
@@ -99,9 +102,11 @@ export default function TaxReportPage() {
       console.error('Fetch error:', error);
       setErrorMsg('حدث خطأ أثناء جلب بيانات الرواتب.');
       setData([]);
+      setTaxValues({});
     } else {
       setData(data || []);
 
+      // Build map of employee_id => tax amount (where tax entry exists)
       const taxMap: { [key: string]: number } = {};
       data?.forEach((p) => {
         const taxEntry = p.payments_entries?.find((entry) => entry.title === 'ضريبة');
@@ -131,10 +136,13 @@ export default function TaxReportPage() {
 
   const handlePrint = () => window.print();
 
-  const filteredPayments = data.filter((p) => (taxValues[p.employee_id] || 0) > 0);
+  // Filter payments to only those employees with tax > 0
+  const filteredPayments = useMemo(() => {
+    return data.filter((p) => (taxValues[p.employee_id] || 0) > 0);
+  }, [data, taxValues]);
+
   const totalSalary = useMemo(() => filteredPayments.reduce((sum, p) => sum + (p.salary || 0), 0), [filteredPayments]);
   const totalTax = useMemo(() => filteredPayments.reduce((sum, p) => sum + (taxValues[p.employee_id] || 0), 0), [filteredPayments, taxValues]);
-
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 rtl font-[Cairo]" dir="rtl">
@@ -164,7 +172,7 @@ export default function TaxReportPage() {
           <div className="flex gap-2">
             <button
               onClick={handlePrint}
-              disabled={!data.length}
+              disabled={filteredPayments.length === 0 || loading}
               className="bg-blue-600 hover:bg-blue-700 text-white rounded px-5 py-2 font-semibold shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               طباعة التقرير
@@ -183,7 +191,7 @@ export default function TaxReportPage() {
           {loading && <p className="text-center text-blue-600 font-medium">...جاري التحميل</p>}
           {errorMsg && <p className="text-center text-red-600 font-semibold">{errorMsg}</p>}
 
-          {data.length > 0 ? (
+          {filteredPayments.length > 0 ? (
             <>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[600px] border-collapse border text-center text-sm">
@@ -195,16 +203,15 @@ export default function TaxReportPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {data.map((p, i) => (
+                    {filteredPayments.map((p, i) => (
                       <tr key={i} className="hover:bg-gray-50">
-                        <td className="border p-2">{p.employees?.first_name || ''}</td>
+                        <td className="border p-2">{`${p.employees?.first_name || ''} ${p.employees?.last_name || ''}`}</td>
                         <td className="border p-2 font-mono text-sm text-blue-900">
                           {(p.salary ?? 0).toLocaleString('ar-IQ')}
                         </td>
-                        <td className="border p-2 font-mono text-sm  text-blue-900">
+                        <td className="border p-2 font-mono text-sm text-blue-900">
                           {(taxValues[p.employee_id] || 0).toLocaleString('ar-IQ')}
                         </td>
-
                       </tr>
                     ))}
                   </tbody>
@@ -213,7 +220,6 @@ export default function TaxReportPage() {
                       <td className="border p-2">المجموع</td>
                       <td className="border p-2 font-mono text-sm text-blue-900">{totalSalary.toLocaleString('ar-IQ')}</td>
                       <td className="border p-2 font-mono text-sm text-blue-900">{totalTax.toLocaleString('ar-IQ')}</td>
-                     
                     </tr>
                   </tfoot>
                 </table>
@@ -244,5 +250,4 @@ export default function TaxReportPage() {
       </div>
     </div>
   );
-};
-
+}

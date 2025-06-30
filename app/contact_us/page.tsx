@@ -10,12 +10,10 @@ import useSWR from "swr";
 import OfficeFormModal from "@/components/OfficeFormModal";
 import { isOfficeExpired } from '@/components/activation';
 
-// Fonts
 const cairo = Cairo({ subsets: ["arabic", "latin"], weight: ["400", "700"], display: "swap" });
 const amiri = Amiri({ subsets: ["arabic"], weight: ["400"], display: "swap" });
 const fonts = { cairo: cairo.className, amiri: amiri.className };
 
-// Helper: Date range for stats
 function getDateRanges() {
   const now = new Date();
   const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -29,10 +27,9 @@ function getDateRanges() {
   };
 }
 
-// SWR Fetcher
 const fetcher = async (key: string) => {
   const supabase = createClient();
-  const { previousMonthStart, previousMonthEnd, currentMonthStart } = getDateRanges();
+  const { previousMonthStart, previousMonthEnd } = getDateRanges();
 
   if (key === "dashboard") {
     const {
@@ -60,55 +57,18 @@ const fetcher = async (key: string) => {
       .in("office_id", officeIds);
     const employeeIds = employees?.map((e) => e.id) ?? [];
 
-    const fetchPayments = async (from: string, to?: string) => {
-      let query = supabase
-        .from("payments")
-        .select(
-          "salary, certificate_percentage, risk_percentage, retire_percentage, trans_pay, net_credits, net_debits, payments_entries (id, type, amount)"
-        )
-        .in("employee_id", employeeIds);
+    const { data: payments } = await supabase
+      .from("payments")
+      .select("*")
+      .in("employee_id", employeeIds)
+      .gte("month", previousMonthStart)
+      .lte("month", previousMonthEnd);
 
-      if (to) query = query.gte("month", from).lte("month", to);
-      else query = query.gte("month", from);
-
-      const { data } = await query;
-      return data ?? [];
-    };
-
-    const prevPayments = await fetchPayments(previousMonthStart, previousMonthEnd);
-    const currPayments = await fetchPayments(currentMonthStart);
-
-
-    const calcNet = (payments: any[]) =>
-      payments.reduce((sum, p) => {
-        const s = p.salary || 0;
-        const cert = (s * (p.certificate_percentage || 0)) / 100;
-        const risk = (s * (p.risk_percentage || 0)) / 100;
-        const retire = (s * (p.retire_percentage || 0)) / 100;
-        const trans = p.trans_pay || 0;
-    
-        const totalNetCredits = (p.payments_entries || [])
-          .filter(e => e.type === 'credit')
-          .reduce((sum2, e) => sum2 + (e.amount || 0), 0);
-    
-        const totalNetDebits = (p.payments_entries || [])
-          .filter(e => e.type === 'debit')
-          .reduce((sum2, e) => sum2 + (e.amount || 0), 0);
-    
-        const credits = s + cert + risk + trans + totalNetCredits;
-        const debits = retire + totalNetDebits;
-    
-        return sum + (credits - debits);
-      }, 0);
-    
-
-    return {
-      employeeCount: employeeIds.length,
-      totalSalaryPrev: calcNet(prevPayments),
-      totalSalaryCurrent: calcNet(currPayments),
-    };
+    return payments ?? [];
   }
-}
+  return null;
+};
+
 export default function HomePage() {
   const [font, setFont] = useState<"cairo" | "amiri">("cairo");
   const [darkMode, setDarkMode] = useState(false);
@@ -128,40 +88,26 @@ export default function HomePage() {
       const u = userData?.user;
       if (u) {
         setUser(u);
-  
-        // 👇 Load office for this user
         const { data: office } = await supabase
           .from("offices")
           .select("name, created_at, is_active")
           .eq("auth_user_id", u.id)
           .single();
-  
+
         if (office) {
           setOfficeName(office.name);
-  
-          // ✅ Check expiry here
           if (!office.is_active || isOfficeExpired(office.created_at)) {
             alert("⚠️ Please, contact 0787-0323-700 to re-activate your accessable office.");
-
-              // ✅ Sign out the user after they click OK
-  await supabase.auth.signOut();
-
-  // Optional: reload or redirect to login
-  location.reload();
-  return;
-
+            await supabase.auth.signOut();
+            location.reload();
+            return;
           }
         }
       }
-  
-      // Load office list for form modal
-      const { data: offices } = await supabase.from("offices").select("id, name").order("name");
-      setOfficeOptions(offices || []);
     };
-  
     fetchInitialData();
   }, []);
-  
+
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentImage((prev) => (prev + 1) % images.length);
@@ -176,58 +122,51 @@ export default function HomePage() {
   };
 
   const handleNewOffice = async (newOffice: any) => {
-    const supabase = createClient();
-  
     try {
+      const supabase = createClient();
       const {
         data: { user },
         error: userError,
       } = await supabase.auth.getUser();
-  
+
       if (userError || !user) throw new Error("User not found");
-  
+
       const { data: existing } = await supabase
         .from("offices")
         .select("id")
         .eq("auth_user_id", user.id)
         .single();
-  
+
       if (existing) {
         alert("لا يمكنك إضافة أكثر من دائرة واحدة.");
         return;
       }
-  
-      // Insert new office
+
       const { error: insertError } = await supabase.from("offices").insert([
         { ...newOffice, auth_user_id: user.id },
       ]);
-  
+
       if (insertError) {
         console.error("Insert failed:", insertError.message);
         alert("فشل في إضافة الدائرة: " + insertError.message);
         return;
       }
-  
+
       setShowOfficeModal(false);
-  
-      // ✅ Try fetching the inserted office again
+
       const { data: insertedOffice, error: fetchError } = await supabase
         .from("offices")
         .select("name")
         .eq("auth_user_id", user.id)
         .single();
-  
-      if (fetchError || !insertedOffice) {
-        console.warn("Office not found after insert");
-        return;
-      }
-  
+
+      if (fetchError || !insertedOffice) return;
+
       setOfficeName(insertedOffice.name);
     } catch (err) {
       console.error("Error in handleNewOffice:", err);
     }
   };
-  
 
   return (
     <div className={`${fonts[font]} ${darkMode ? "dark" : ""}`}>
@@ -240,14 +179,12 @@ export default function HomePage() {
           className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 rtl"
         >
           <div className="flex flex-col md:flex-row min-h-screen">
-            {/* Sidebar */}
             <motion.div
               initial={{ x: -100, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               transition={{ duration: 0.6 }}
               className="md:w-1/2 w-full p-6 md:p-10 bg-white dark:bg-gray-800 space-y-6 shadow-xl"
             >
-              {/* Header */}
               <div className="flex justify-between items-center flex-wrap gap-4">
                 <div className="flex gap-2">
                   {Object.keys(fonts).map((f) => (
@@ -255,9 +192,7 @@ export default function HomePage() {
                       key={f}
                       onClick={() => setFont(f as "cairo" | "amiri")}
                       className={`px-3 py-1 rounded border text-sm hover:scale-105 transition ${
-                        font === f
-                          ? "bg-blue-600 text-white"
-                          : "border-gray-300 text-gray-600 dark:text-white"
+                        font === f ? "bg-blue-600 text-white" : "border-gray-300 text-gray-600 dark:text-white"
                       }`}
                     >
                       {f.charAt(0).toUpperCase() + f.slice(1)}
@@ -282,50 +217,50 @@ export default function HomePage() {
                 </div>
               </div>
 
-              <h1 className="text-3xl font-bold text-blue-800 dark:text-blue-400">مرحباً بك </h1>
-              <h1 className="text-3xl font-bold text-blue-800 dark:text-blue-400"> في نظام الرواتب </h1>
-              <h1 className="text-3xl font-bold text-blue-800 dark:text-blue-400">و الترقيات  </h1>
-              <p className="text-base text-gray-700 dark:text-gray-300">
-                تطبيقنا يسهل عليك إدارة الرواتب و الترقيات بسلاسة وأمان. كل ما تحتاجه في مكان واحد.
-              </p>
-              <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                <li>✔️ إدارة الموظفين بسهولة</li>
-                <li>✔️ حسابات دقيقة وسريعة للرواتب</li>
-                <li>✔️ تجربة استخدام آمنة</li>
-                <li>✔️ جمع بيانات الدوائر التابعة لدائرتك في مكان واحد</li>
-                <li>✔️ عملك من خلال الحاسوب او الهاتف بسهولة</li>
-              </ul>
+              <h1 className="text-3xl font-bold text-blue-800 dark:text-blue-400">📞 تواصل معنا</h1>
 
-              {user && <div className="text-sm text-gray-500 dark:text-gray-400">مرحباً، {user.email}</div>}
+              <div className="space-y-2 mt-6">
+                <div className="flex items-start gap-2">
+                  <span className="text-xl">📍</span>
+                  <div>
+                    <h4 className="font-semibold text-gray-800 dark:text-white">العنوان</h4>
+                    <p className="text-gray-600 dark:text-gray-300">العراق - النجف الأشرف</p>
+                  </div>
+                </div>
 
-              <div className="text-sm text-right">
-                <button className="text-blue-600 underline" onClick={() => setShowOfficeModal(true)}>
-                  {officeName || "اسم الدائرة "}
-                </button>
+                <div className="flex items-start gap-2">
+                  <span className="text-xl">✉️</span>
+                  <div>
+                    <h4 className="font-semibold text-gray-800 dark:text-white">البريد الإلكتروني</h4>
+                    <p className="text-gray-600 dark:text-gray-300">huseinaltae@gmail.com</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2">
+                  <span className="text-xl">📞</span>
+                  <div>
+                    <h4 className="font-semibold text-gray-800 dark:text-white">رقم الهاتف</h4>
+                    <p className="text-gray-600 dark:text-gray-300">0787-0323-700</p>
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4 mt-4">
-                <DashboardCard title="عدد الموظفين" value={dashboardData?.employeeCount} color="blue" />
-                <DashboardCard title="رواتب الشهر السابق" value={dashboardData?.totalSalaryPrev} color="green" />
-                <DashboardCard title="رواتب الشهر الحالي" value={dashboardData?.totalSalaryCurrent} color="green" />
-              </div>
-
-
-              <div className="flex flex-wrap gap-3 mt-6">
-                <NavButton href="/employees" label="الموظفين" color="blue" />
-                <NavButton href="/payments/report" label="الرواتب" color="green" />
-                <NavButton href="/promotions" label="الترقيات" color="red" />
-                <NavButton href="/contact_us" label="اتصل ينا" color="blue" />
+              <div className="pt-4">
+                <Link
+                  href="/home"
+                  className="inline-block px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded shadow transition"
+                >
+                  ⬅️ العودة إلى الصفحة الرئيسية
+                </Link>
               </div>
             </motion.div>
 
             <motion.div
-  initial={{ x: 100, opacity: 0 }}
-  animate={{ x: 0, opacity: 1 }}
-  transition={{ duration: 0.6 }}
-  className="relative w-full md:w-1/2 h-64 md:h-auto min-h-[256px] overflow-hidden bg-gray-200 dark:bg-gray-700"
->
-
+              initial={{ x: 100, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ duration: 0.6 }}
+              className="relative w-full md:w-1/2 h-64 md:h-auto min-h-[256px] overflow-hidden bg-gray-200 dark:bg-gray-700"
+            >
               <AnimatePresence mode="wait">
                 <motion.div
                   key={images[currentImage]}
@@ -341,7 +276,7 @@ export default function HomePage() {
                     fill
                     className="object-cover"
                     sizes="100vw"
-                    priority={currentImage === 0} // only first slide priority for better perf
+                    priority={currentImage === 0}
                   />
                 </motion.div>
               </AnimatePresence>
@@ -353,51 +288,11 @@ export default function HomePage() {
       <OfficeFormModal
         open={showOfficeModal}
         onClose={() => setShowOfficeModal(false)}
-        officeOptions={officeOptions} // passed from fetch
-        onOfficeAdded={handleNewOffice} // your add handler
+        officeOptions={officeOptions}
+        onOfficeAdded={handleNewOffice}
         initialName={officeName || ""}
-        initialParentId={null} // or pass existing parent office id if any
+        initialParentId={null}
       />
     </div>
   );
 }
-
-// Utility Components with static Tailwind classes for dark mode
-
-type Color = "blue" | "green" | "red";
-
-const bgColors: Record<Color, string> = {
-  blue: "bg-blue-100 dark:bg-blue-900",
-  green: "bg-green-100 dark:bg-green-900",
-  red: "bg-red-100 dark:bg-red-900",
-};
-
-const textColors: Record<Color, string> = {
-  blue: "text-blue-800 dark:text-white",
-  green: "text-green-800 dark:text-white",
-  red: "text-red-800 dark:text-white",
-};
-
-const DashboardCard = ({ title, value, color }: { title: string; value: number | undefined; color: Color }) => (
-  <motion.div whileHover={{ scale: 1.05 }} className={`${bgColors[color]} p-4 rounded shadow`}>
-    <p className={`text-sm ${textColors[color]}`}>{title}</p>
-    <p className={`text-xl font-bold ${textColors[color]}`}>
-      {value !== undefined ? value.toLocaleString() : "..."}
-    </p>
-  </motion.div>
-);
-
-const navButtonBgColors: Record<Color, string> = {
-  blue: "bg-blue-600 hover:bg-blue-700",
-  green: "bg-green-600 hover:bg-green-700",
-  red: "bg-red-600 hover:bg-red-700",
-};
-
-const NavButton = ({ href, label, color }: { href: string; label: string; color: Color }) => (
-  <Link
-    href={href}
-    className={`${navButtonBgColors[color]} text-white px-4 py-2 rounded transition text-center inline-block`}
-  >
-    {label}
-  </Link>
-);

@@ -377,7 +377,6 @@ return (
               <option value="سلقة زواج">سلقة زواج</option>
               <option value="قرض مصرفي">قرض مصرفي</option>
               <option value="ضريبة">ضريبة</option>
-              <option value="رسم طابع">رسم طابع</option>
             </select>
 
             <input

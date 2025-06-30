@@ -10,7 +10,7 @@ type OfficeFormModalProps = {
   open: boolean;
   onClose: () => void;
   officeOptions: OfficeOption[]; // For parent office dropdown
-  onOfficeAdded: (office: { name: string; parent_id?: string }) => void;
+  onOfficeAdded: (office: { name: string; parent_id?: string; office_phone?: string }) => void;
   initialName?: string;
   initialParentId?: string | null;
 };
@@ -24,6 +24,7 @@ export default function OfficeFormModal({
   initialParentId = null,
 }: OfficeFormModalProps) {
   const [officeName, setOfficeName] = useState(initialName);
+  const [officePhone, setOfficePhone] = useState("");
   const [parentId, setParentId] = useState<string | null>(initialParentId);
 
   useEffect(() => {
@@ -64,6 +65,14 @@ export default function OfficeFormModal({
             onChange={(e) => setOfficeName(e.target.value)}
             className="w-full border border-gray-300 rounded px-3 py-2"
             required
+          />
+          {/* Office Phone Input */}
+          <input
+            type="text"
+            placeholder="موبايل"
+            value={officePhone}
+            onChange={(e) => setOfficePhone(e.target.value)}
+            className="w-full border border-gray-300 rounded px-3 py-2"
           />
 
           {/* Parent Office Dropdown */}

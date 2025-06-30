@@ -211,7 +211,7 @@ export default function AllEmployeesPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="اسم الموظف"
-                className="border border-gray-300 bg-white px-3 py-1 rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm w-full sm:w-48"
+                className="border border-gray-300 bg-white px- py-1 rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm w-full sm:w-60"
               />
             </div>
           </div>
@@ -250,14 +250,14 @@ export default function AllEmployeesPage() {
             <table className="min-w-[1000px] w-full border-collapse border text-center text-sm" dir="rtl">
               <thead className="bg-gray-100 sticky top-0">
                 <tr>
-                  <th className="border p-2">الاسم</th>
-                  <th className="border p-2">الدائرة</th>
-                  <th className="border p-2">الشهادة</th>
-                  <th className="border p-2">العنوان الوظيفي</th>
-                  <th className="border p-2">تاريخ التعيين</th>
-                  <th className="border p-2">رقم الحساب المصرفي</th>
-                  <th className="border p-2">المصرف</th>
-                  <th className="border p-2">ملاحظات</th>
+                  <th className="border p-2 text-sm">الاسم</th>
+                  {/* <th className="border p-2 text-sm">الدائرة</th> */}
+                  <th className="border p-2 text-sm">الشهادة</th>
+                  <th className="border p-2 text-sm">العنوان الوظيفي</th>
+                  <th className="border p-2 text-sm">تاريخ التعيين</th>
+                  <th className="border p-2 text-sm">رقم الحساب المصرفي</th>
+                  <th className="border p-2 text-sm">المصرف</th>
+                  <th className="border p-2 text-sm">ملاحظات</th>
                 </tr>
               </thead>
               <tbody>
@@ -274,7 +274,7 @@ export default function AllEmployeesPage() {
                         {e.first_name} {e.last_name}
                       </button>
                     </td>
-                    <td className="border p-2">{e.office?.name || '—'}</td>
+                    {/* <td className="border p-2">{e.office?.name || '—'}</td> */}
                     <td className="border p-2">{e.certificate}</td>
                     <td className="border p-2">{e.job_title}</td>
                     <td className="border p-2">{e.hire_date}</td>

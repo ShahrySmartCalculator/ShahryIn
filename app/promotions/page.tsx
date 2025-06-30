@@ -39,6 +39,7 @@ function toArabicIndic(value: number | string | undefined | null) {
   return str.replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[+d]);
 }
 
+
 function formatArabicMonth(month: string) {
   const months = [
     'كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران',
@@ -47,15 +48,18 @@ function formatArabicMonth(month: string) {
   const [year, m] = month.split('-');
   const monthName = months[parseInt(m) - 1] || '';
   return `${monthName} ${toArabicIndic(year)}`;
-}
-function formatArabicDate(dateStr: string | undefined | null) {
-  if (!dateStr) return '—';
-  const parts = dateStr.split('-');
-  if (parts.length !== 3) return toArabicIndic(dateStr);
-  const [year, month, day] = parts;
-  const formatted = `${toArabicIndic(day)}/${toArabicIndic(month)}/${toArabicIndic(year)}`;
-  return <span dir="rtl" style={{ unicodeBidi: 'embed' }}>{formatted}</span>;
-}
+} 
+  
+
+  const formatArabicDate = (dateStr?: string) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('ar-IQ', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  }; 
 
 
 export default function PromotionsPage() {
@@ -156,7 +160,7 @@ export default function PromotionsPage() {
   
             th, td {
               border: 1px solid #999;
-              padding: 6px 10px;
+              padding: 4px 6px;
               text-align: center;
             }
   
@@ -231,13 +235,18 @@ export default function PromotionsPage() {
     alert('تم حفظ الترقية بنجاح');
   };
 
-  const filteredPromotions = promotions.filter((p) => {
-    const emp = getEmployee(p.employee_id);
-    if (!emp) return false;
-    const fullName = `${emp.first_name} ${emp.last_name}`.toLowerCase();
-    return (!searchName || fullName.includes(searchName.toLowerCase())) &&
-           (!month || (p.due_date?.startsWith(month)));
-  });
+  const filteredPromotions = (searchName || month)
+  ? promotions.filter((p) => {
+      const emp = getEmployee(p.employee_id);
+      if (!emp) return false;
+
+      const fullName = `${emp.first_name} ${emp.last_name}`.toLowerCase();
+      const nameMatches = searchName ? fullName.includes(searchName.toLowerCase()) : true;
+      const monthMatches = month ? p.due_date?.startsWith(month) : true;
+
+      return nameMatches && monthMatches;
+    })
+  : [];
 
   const onCommitteeChange = (field: string, value: string) => {
     setCommitteeMembers((prev) => ({ ...prev, [field]: value }));
@@ -260,6 +269,7 @@ export default function PromotionsPage() {
               onChange={e => setMonth(e.target.value)}
               aria-label="اختر الشهر"
             />
+            
             <input
               type="text"
               placeholder="بحث عن موظف"
@@ -268,6 +278,7 @@ export default function PromotionsPage() {
               onChange={e => setSearchName(e.target.value)}
               aria-label="بحث عن موظف"
             />
+            
             <button
               className="bg-blue-200 px-5 py-1 rounded text-lg hover:bg-blue-700 hover:text-white disabled:opacity-50 transition w-full sm:w-auto text-center"
               onClick={() => {
@@ -293,7 +304,7 @@ export default function PromotionsPage() {
         </section>
 
         {/* Report Table */}
-        {month && (
+        {filteredPromotions.length > 0 && (
           <section
             ref={reportRef}
             className="bg-white rounded-xl shadow p-4 print:shadow-none print:rounded-none"
@@ -320,7 +331,7 @@ export default function PromotionsPage() {
                     <th className="border p-2" scope="col">الدرجة الجديدة</th>
                     <th className="border p-2" scope="col">المرحلة الجديدة</th>
                     <th className="border p-2" scope="col">الراتب الجديد</th>
-                    <th className="border p-2" scope="col">ملاحظة</th>
+                    {/* <th className="border p-2" scope="col">ملاحظة</th> */}
                   </tr>
                 </thead>
                 <tbody>
@@ -333,7 +344,7 @@ export default function PromotionsPage() {
                             setNewPromotion({ ...p });
                             setShowForm(true);
                           }}
-                          className="hover:bg-gray-50 cursor-pointer"
+                          className="hover:bg-gray-50 py-1 cursor-pointer"
                           tabIndex={0}
                           role="row"
                           aria-label={`ترقية الموظف ${emp?.first_name} ${emp?.last_name}`}
@@ -347,14 +358,20 @@ export default function PromotionsPage() {
                           <td className="border p-1 text-right align-top">
                             {emp?.first_name} {emp?.last_name}
                           </td>
-                          <td className="border p-1">{toArabicIndic(p.old_degree)}</td>
-                          <td className="border p-1">{toArabicIndic(p.old_level)}</td>
-                          <td className="border p-1">{toArabicIndic(p.old_salary)}</td>
-                          <td className="border p-1">{formatArabicDate(p.due_date)}</td>
-                          <td className="border p-1">{toArabicIndic(p.new_degree)}</td>
-                          <td className="border p-1">{toArabicIndic(p.new_level)}</td>
-                          <td className="border p-1">{toArabicIndic(p.new_salary)}</td>
-                          <td className="border p-1">{p.note}</td>
+                          <td className="border p-1 text-lg font-mono text-blue-900">
+                        {(p.old_degree ?? 0).toLocaleString('ar-IQ')}</td>
+                        <td className="border p-1 text-lg font-mono text-blue-900">
+                        {(p.old_level ?? 0).toLocaleString('ar-IQ')}</td>
+                        <td className="border p-1 text-lg font-mono text-blue-900">
+                        {(p.old_salary ?? 0).toLocaleString('ar-IQ')}</td>
+                        <td className="border p-1">{formatArabicDate(p.due_date)}</td>
+                        <td className="border p-1 text-lg font-mono text-blue-900">
+                        {(p.new_degree ?? 0).toLocaleString('ar-IQ')}</td>
+                        <td className="border p-1 text-lg font-mono text-blue-900">
+                        {(p.new_level ?? 0).toLocaleString('ar-IQ')}</td>
+                        <td className="border p-1 text-lg font-mono text-blue-900">
+                        {(p.new_salary ?? 0).toLocaleString('ar-IQ')}</td>
+                        {/* <td className="border text-lg p-1">{p.note || ''}</td> */}
                         </tr>
                         {p.note && (
                           <tr>
@@ -376,7 +393,7 @@ export default function PromotionsPage() {
     const label = key === 'chair' ? 'رئيس اللجنة' : 'عضو';
     return (
       <div key={key}>
-        <label htmlFor={`committee-${key}`} className="font-bold block mb-2">{label}</label>
+        <label htmlFor={`committee-${key}`} className="text-sm block mb-2">{label}</label>
         <input
           id={`committee-${key}`}
           type="text"
@@ -392,163 +409,207 @@ export default function PromotionsPage() {
           </section>
         )}
 
-        {/* Form Modal */}
-        {showForm && (
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="modal-title"
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-2"
-          >
-            <div className="bg-white p-4 rounded w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-              {/* Search & Date */}
-              <div className="mb-4">
-                <div className="flex flex-col md:flex-row gap-1">
-                  <div className="relative w-full md:w-3/5">
-                    <input
-                      type="text"
-                      className="border py-0.25 rounded w-full"
-                      placeholder="اكتب اسم الموظف..."
-                      aria-label="بحث عن موظف للترقية"
-                      value={
-                        newPromotion.employee_id
-                          ? `${getEmployee(newPromotion.employee_id)?.first_name || ''} ${getEmployee(newPromotion.employee_id)?.last_name || ''}`
-                          : searchName
-                      }
-                      onChange={(e) => {
-                        setSearchName(e.target.value);
-                        setNewPromotion((prev: Partial<Promotion>) => ({ ...prev, employee_id: '' }));
+{showForm && (
+  <div
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="modal-title"
+    className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-2"
+  >
+    <div className="bg-white w-full max-w-md rounded-xl shadow-lg p-4 sm:p-6 space-y-4 overflow-y-auto min-h-[450px] max-h-[90vh]">
+
+      {/* Employee Search & Due Date */}
+      <div className="space-y-2">
+        <div className="flex flex-col md:flex-row gap-2">
+          <div className="relative w-full md:w-3/5">
+            <input
+              type="text"
+              className="w-full border rounded px-2 py-1 text-sm"
+              placeholder="اكتب اسم الموظف..."
+              aria-label="بحث عن موظف للترقية"
+              value={
+                newPromotion.employee_id
+                  ? `${getEmployee(newPromotion.employee_id)?.first_name || ''} ${getEmployee(newPromotion.employee_id)?.last_name || ''}`
+                  : searchName
+              }
+              onChange={(e) => {
+                setSearchName(e.target.value);
+                setNewPromotion((prev: Partial<Promotion>) => ({ ...prev, employee_id: '' }));
+              }}
+            />
+            {searchName && !newPromotion.employee_id && (
+              <div className="absolute z-10 bg-white border w-full max-h-[240px] overflow-y-auto shadow-lg text-sm">
+                {employees
+                  .filter(emp =>
+                    `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(searchName.toLowerCase())
+                  )
+                  .map(emp => (
+                    <div
+                      key={emp.id}
+                      className="px-4 py-1 hover:bg-gray-100 cursor-pointer"
+                      onClick={() => {
+                        setNewPromotion((prev: Partial<Promotion>) => ({ ...prev, employee_id: emp.id }));
+                        setSearchName('');
                       }}
-                    />
-                    {searchName && !newPromotion.employee_id && (
-                      <div className="absolute z-10 bg-white border w-full max-h-[240px] overflow-y-auto shadow-lg text-sm">
-                        {employees
-                          .filter((emp) =>
-                            `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(searchName.toLowerCase())
-                          )
-                          .map((emp) => (
-                            <div
-                              key={emp.id}
-                              className="px-4 py-0.25 hover:bg-gray-100 cursor-pointer"
-                              onClick={() => {
-                                setNewPromotion((prev: Partial<Promotion>) => ({ ...prev, employee_id: emp.id }));
-                                setSearchName('');
-                              }}
-                            >
-                              {emp.first_name} {emp.last_name}
-                            </div>
-                          ))}
-                        {employees.filter((emp) =>
-                          `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(searchName.toLowerCase())
-                        ).length === 0 && (
-                          <div className="px-4 py-0.25 text-gray-500">لا توجد نتائج</div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <input
-                    type="month"
-                    className="border py-0.25 rounded w-full md:w-2/5"
-                    aria-label="تاريخ الاستحقاق"
-                    value={newPromotion.due_date?.slice(0, 7) || ''}
-                    onChange={(e) => {
-                      const selectedMonth = e.target.value;
-                      const correctedDate = `${selectedMonth}-01`;
-                      setNewPromotion((prev: Partial<Promotion>) => ({ ...prev, due_date: correctedDate }));
-                    }}
-                  />
-                </div>
+                    >
+                      {emp.first_name} {emp.last_name}
+                    </div>
+                  ))}
+                {employees.filter(emp =>
+                  `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(searchName.toLowerCase())
+                ).length === 0 && (
+                  <div className="px-4 py-1 text-gray-500">لا توجد نتائج</div>
+                )}
               </div>
-
-              {/* Promotion Fields */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <input
-                  type="number"
-                  placeholder="الدرجة الحالية"
-                  className="border py-0.25"
-                  value={newPromotion.old_degree || ''}
-                  onChange={e => setNewPromotion(prev => ({ ...prev, old_degree: +e.target.value }))}
-                  aria-label="الدرجة الحالية"
-                  pattern="[0-9]*"
-                  inputMode="numeric"
-                />
-                <input
-                  type="number"
-                  placeholder="المرحلة الحالية"
-                  className="border py-0.25"
-                  value={newPromotion.old_level || ''}
-                  onChange={e => setNewPromotion(prev => ({ ...prev, old_level: +e.target.value }))}
-                  aria-label="المرحلة الحالية"
-                  pattern="[0-9]*"
-                  inputMode="numeric"
-                />
-                <input
-                  type="number"
-                  placeholder="الراتب الحالي"
-                  className="border py-0.25"
-                  value={newPromotion.old_salary || ''}
-                  onChange={e => setNewPromotion(prev => ({ ...prev, old_salary: +e.target.value }))}
-                  aria-label="الراتب الحالي"
-                  pattern="[0-9]*"
-                  inputMode="numeric"
-                />
-                <input
-                  type="number"
-                  placeholder="الدرجة الجديدة"
-                  className="border py-0.25"
-                  value={newPromotion.new_degree || ''}
-                  onChange={e => setNewPromotion(prev => ({ ...prev, new_degree: +e.target.value }))}
-                  aria-label="الدرجة الجديدة"
-                  pattern="[0-9]*"
-                  inputMode="numeric"
-                />
-                <input
-                  type="number"
-                  placeholder="المرحلة الجديدة"
-                  className="border py-0.25"
-                  value={newPromotion.new_level || ''}
-                  onChange={e => setNewPromotion(prev => ({ ...prev, new_level: +e.target.value }))}
-                  aria-label="المرحلة الجديدة"
-                  pattern="[0-9]*"
-                  inputMode="numeric"
-                />
-                <input
-                  type="number"
-                  placeholder="الراتب الجديد"
-                  className="border py-0.25"
-                  value={newPromotion.new_salary || ''}
-                  onChange={e => setNewPromotion(prev => ({ ...prev, new_salary: +e.target.value }))}
-                  aria-label="الراتب الجديد"
-                  pattern="[0-9]*"
-                  inputMode="numeric"
-                />
-                <textarea
-                  placeholder="ملاحظة"
-                  className="border py-0.25 col-span-full"
-                  value={newPromotion.note || ''}
-                  onChange={e => setNewPromotion(prev => ({ ...prev, note: e.target.value }))}
-                  aria-label="ملاحظة"
-                />
-              </div>
-
-              {/* Modal Actions */}
-              <div className="flex flex-col sm:flex-row justify-between mt-4 gap-1">
-                <button
-                  className="bg-green-600 text-white px-4 py-1 rounded w-full sm:w-auto"
-                  onClick={handleInsertOrUpdate}
-                >
-                  حفظ
-                </button>
-                <button
-                  className="bg-gray-500 text-white px-4 py-1 rounded w-full sm:w-auto"
-                  onClick={() => setShowForm(false)}
-                >
-                  إلغاء
-                </button>
-              </div>
-            </div>
+            )}
           </div>
-        )}
+
+          <input
+            type="month"
+            className="w-full md:w-2/5 border rounded px-2 py-1 text-sm"
+            aria-label="تاريخ الاستحقاق"
+            value={newPromotion.due_date?.slice(0, 7) || ''}
+            onChange={(e) => {
+              const selectedMonth = e.target.value;
+              const correctedDate = `${selectedMonth}-01`;
+              setNewPromotion((prev: Partial<Promotion>) => ({ ...prev, due_date: correctedDate }));
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Promotion Fields */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* Old Degree */}
+        <select
+          className="w-full border rounded px-2 py-1 text-sm h-9"
+          value={newPromotion.old_degree || ''}
+          onChange={e =>
+            setNewPromotion((prev: Partial<Promotion>) => ({
+              ...prev,
+              old_degree: e.target.value ? +e.target.value : null
+            }))
+          }
+        >
+          <option value="">اختر الدرجة</option>
+          {Array.from({ length: 10 }, (_, i) => i + 1).map(deg => (
+            <option key={deg} value={deg}>الدرجة {deg}</option>
+          ))}
+        </select>
+
+        {/* Old Level */}
+        <select
+          className="w-full border rounded px-2 py-1 text-sm h-9"
+          value={newPromotion.old_level || ''}
+          onChange={e =>
+            setNewPromotion((prev: Partial<Promotion>) => ({
+              ...prev,
+              old_level: e.target.value ? +e.target.value : null
+            }))
+          }
+        >
+          <option value="">اختر المرحلة</option>
+          {Array.from({ length: 12 }, (_, i) => i + 1).map(lvl => (
+            <option key={lvl} value={lvl}>المرحلة {lvl}</option>
+          ))}
+        </select>
+
+        {/* Old Salary */}
+        <input
+          type="number"
+          className="w-full border rounded px-2 py-1 text-sm h-9"
+          value={newPromotion.old_salary || ''}
+          onChange={e =>
+            setNewPromotion((prev: Partial<Promotion>) => ({
+              ...prev,
+              old_salary: e.target.value ? +e.target.value : null
+            }))
+          }
+          placeholder="الراتب الحالي"
+        />
+
+        {/* New Degree */}
+        <select
+          className="w-full border rounded px-2 py-1 text-sm h-9"
+          value={newPromotion.new_degree || ''}
+          onChange={e =>
+            setNewPromotion((prev: Partial<Promotion>) => ({
+              ...prev,
+              new_degree: e.target.value ? +e.target.value : null
+            }))
+          }
+        >
+          <option value="">اختر الدرجة</option>
+          {Array.from({ length: 10 }, (_, i) => i + 1).map(deg => (
+            <option key={deg} value={deg}>الدرجة {deg}</option>
+          ))}
+        </select>
+
+        {/* New Level */}
+        <select
+          className="w-full border rounded px-2 py-1 text-sm h-9"
+          value={newPromotion.new_level || ''}
+          onChange={e =>
+            setNewPromotion((prev: Partial<Promotion>) => ({
+              ...prev,
+              new_level: e.target.value ? +e.target.value : null
+            }))
+          }
+        >
+          <option value="">اختر المرحلة</option>
+          {Array.from({ length: 12 }, (_, i) => i + 1).map(lvl => (
+            <option key={lvl} value={lvl}>المرحلة {lvl}</option>
+          ))}
+        </select>
+
+        {/* New Salary */}
+        <input
+          type="number"
+          className="w-full border rounded px-2 py-1 text-sm h-9"
+          value={newPromotion.new_salary || ''}
+          onChange={e =>
+            setNewPromotion((prev: Partial<Promotion>) => ({
+              ...prev,
+              new_salary: e.target.value ? +e.target.value : null
+            }))
+          }
+          placeholder="الراتب الجديد"
+        />
+
+        {/* Note */}
+        <textarea
+          className="w-full border rounded px-2 py-1 text-sm min-h-[80px] sm:col-span-3"
+          value={newPromotion.note || ''}
+          onChange={e =>
+            setNewPromotion((prev: Partial<Promotion>) => ({
+              ...prev,
+              note: e.target.value
+            }))
+          }
+          placeholder="ملاحظة"
+        />
+      </div>
+
+      {/* Modal Actions */}
+      <div className="flex flex-col sm:flex-row justify-between gap-2 pt-2">
+        <button
+          className="bg-green-600 text-white px-4 py-1 rounded w-full sm:w-auto"
+          onClick={handleInsertOrUpdate}
+        >
+          حفظ
+        </button>
+        <button
+          className="bg-gray-500 text-white px-4 py-1 rounded w-full sm:w-auto"
+          onClick={() => setShowForm(false)}
+        >
+          إلغاء
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+
       </div>
     </div>
   );

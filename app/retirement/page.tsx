@@ -239,7 +239,7 @@ const RetireReportPage = () => {
                         <td className="border p-2 font-mono text-blue-900">
                           {((p.salary || 0) * percentage / 100).toLocaleString('ar-IQ')}
                         </td>
-                      </tr>
+                      </tr> 
                     ))}
                   </tbody>
                   <tfoot className="font-semibold bg-gray-100">

@@ -112,6 +112,93 @@ export default function PaymentsReport() {
         return;
       }
 
+      const handleCopyToNextMonth = async (currentMonth: string) => {
+        try {
+          if (!office) {
+            alert('الدائرة غير محددة.');
+            return false;
+          }
+      
+          const officeIds = await getOfficeAndDescendantsIds(office.id);
+      
+          const { data: employees, error: empErr } = await supabase
+            .from('employees')
+            .select('id')
+            .in('office_id', officeIds);
+      
+          if (empErr || !employees) {
+            console.error(empErr);
+            return false;
+          }
+      
+          const employeeIds = employees.map(e => e.id);
+          const { data: oldPayments, error: payErr } = await supabase
+            .from('payments')
+            .select('*, payments_entries(*)')
+            .eq('month', normalizeMonth(currentMonth))
+            .in('employee_id', employeeIds);
+      
+          if (payErr || !oldPayments) {
+            console.error(payErr);
+            return false;
+          }
+      
+          const nextMonth = normalizeMonth(getNextMonth(currentMonth));
+      
+          const newPayments = oldPayments.map((p) => ({
+            id: uuidv4(),
+            employee_id: p.employee_id,
+            month: nextMonth,
+            degree: p.degree,
+            level: p.level,
+            salary: p.salary,
+            certificate_percentage: p.certificate_percentage,
+            risk_percentage: p.risk_percentage,
+            trans_pay: p.trans_pay,
+            retire_percentage: p.retire_percentage,
+            net_credits: p.net_credits,
+            net_debits: p.net_debits,
+            note: p.note,
+          }));
+      
+          const { error: insertPayError } = await supabase.from('payments').insert(newPayments);
+      
+          if (insertPayError) {
+            console.error('Insert payments failed:', insertPayError);
+            return false;
+          }
+      
+          const paymentIdMap: Record<string, string> = {};
+          oldPayments.forEach((oldP, idx) => {
+            paymentIdMap[oldP.id] = newPayments[idx].id;
+          });
+      
+          const newEntries = oldPayments.flatMap((p) =>
+            p.payments_entries.map((e) => ({
+              id: uuidv4(),
+              payment_id: paymentIdMap[p.id],
+              title: e.title,
+              amount: e.amount,
+              type: e.type,
+            }))
+          );
+      
+          if (newEntries.length > 0) {
+            const { error: entryError } = await supabase.from('payments_entries').insert(newEntries);
+            if (entryError) {
+              console.error('Insert entries failed:', entryError);
+              return false;
+            }
+          }
+      
+          return true;
+        } catch (error) {
+          console.error('Copy logic failed:', error);
+          return false;
+        }
+      };
+      
+
       // Query payments for these employees
       let query = supabase
         .from('payments')
@@ -176,8 +263,142 @@ export default function PaymentsReport() {
     }
   };
 
-  // Your handleCopyToNextMonth function unchanged (or update similarly if needed)
-  // Your printReport function unchanged
+  const handleCopyToNextMonth = async () => {
+      if (!monthFilter) return alert('يرجى اختيار الشهر الحالي أولاً');
+  
+      const currentMonthDate = normalizeMonth(monthFilter);
+      const nextMonthStr = getNextMonth(monthFilter);
+      const nextMonthDate = normalizeMonth(nextMonthStr);
+  
+      const confirmCopy = window.confirm(`هل تريد إنشاء رواتب لشهر ${nextMonthStr}?`);
+      if (!confirmCopy) return;
+  
+      setLoadingCopy(true);
+  
+      try {
+        const { data: existingPayments, error: existingError } = await supabase
+          .from('payments')
+          .select('id')
+          .eq('month', nextMonthDate)
+          .limit(1);
+  
+        if (existingError) throw existingError;
+        if (existingPayments && existingPayments.length > 0) {
+          alert('تم إنشاء رواتب هذا الشهر مسبقًا!');
+          setLoadingCopy(false);
+          return;
+        }
+  
+        const { data: employeesData, error: employeesError } = await supabase
+          .from('employees')
+          .select('id')
+          .eq('office_id', office?.id);
+  
+        if (employeesError) throw employeesError;
+  
+        const employeeIds = employeesData?.map((e) => e.id) || [];
+  
+        if (employeeIds.length === 0) {
+          alert('لا يوجد موظفون في هذه الدائرة.');
+          setLoadingCopy(false);
+          return;
+        }
+  
+        const { data: currentPayments, error: fetchError } = await supabase
+          .from('payments')
+          .select(
+            `*,
+             payments_entries (
+               id, type, title, amount
+             )`
+          )
+          .eq('month', currentMonthDate)
+          .in('employee_id', employeeIds);
+  
+        if (fetchError) throw fetchError;
+  
+        if (!currentPayments || currentPayments.length === 0) {
+          alert('لا توجد رواتب لهذا الشهر.');
+          setLoadingCopy(false);
+          return;
+        }
+  
+        const newPayments: any[] = [];
+        const newEntries: any[] = [];
+  
+        for (const payment of currentPayments) {
+          const { id: oldId, created_at, payments_entries, ...rest } = payment;
+          const newPaymentId = uuidv4();
+  
+          newPayments.push({
+            ...rest,
+            id: newPaymentId,
+            month: nextMonthDate,
+            created_at: new Date().toISOString(),
+          });
+  
+          for (const entry of payments_entries || []) {
+            newEntries.push({
+              id: uuidv4(),
+              payment_id: newPaymentId,
+              type: entry.type,
+              title: entry.title,
+              amount: entry.amount,
+            });
+          }
+        }
+  
+        const { error: insertPaymentsError } = await supabase.from('payments').insert(newPayments);
+        if (insertPaymentsError) throw insertPaymentsError;
+  
+        if (newEntries.length > 0) {
+          const { error: insertEntriesError } = await supabase.from('payments_entries').insert(newEntries);
+          if (insertEntriesError) throw insertEntriesError;
+        }
+  
+        alert('تم إنشاء رواتب الشهر القادم بنجاح!');
+        fetchPayments();
+      } catch (error: any) {
+        alert(`حدث خطأ: ${error.message || error}`);
+      } finally {
+        setLoadingCopy(false);
+      }
+    };
+  
+    const printReport = () => window.print();
+  
+    useEffect(() => {
+      async function fetchUserAndOffice() {
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+  
+        if (user) {
+          setUserEmail(user.email ?? null);
+  
+          const { data: officeData, error: officeError } = await supabase
+            .from('offices')
+            .select('id, name')
+            .eq('auth_user_id', user.id)
+            .single();
+  
+          if (officeData) {
+            setOffice(officeData);
+          } else if (officeError) {
+            console.error('Office fetch error:', officeError.message);
+          }
+        } else if (userError) {
+          console.error('User fetch error:', userError.message);
+        }
+      }
+  
+      fetchUserAndOffice();
+    }, [supabase]);
+  
+    useEffect(() => {
+      fetchPayments();
+    }, [office, monthFilter]);
 
   useEffect(() => {
     async function fetchUserAndOffice() {
@@ -245,14 +466,19 @@ export default function PaymentsReport() {
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row sm:flex-wrap justify-center gap-3">
-            {[ 
+            {[
               { type: 'link', label: 'الرئيسية', href: '/home' },
               { type: 'button', label: 'إضافة راتب جديد', onClick: () => setShowModal(true) },
               { type: 'link', label: 'تقرير التقاعد', href: '/retirement' },
               { type: 'link', label: 'تقرير الضرائب', href: '/tax-report' },
-              // add more buttons here as needed
-              { type: 'button', label: loadingCopy ? 'جاري الإنشاء...' : 'إنشاء رواتب الشهر القادم', onClick: async () => {/* your copy logic here */}, disabled: loadingCopy },
-              { type: 'button', label: 'طباعة التقرير', onClick: () => window.print() },
+              { type: 'link', label: ' اضافة استفطاع', href: '/stamp' },
+              {
+                type: 'button',
+                label: loadingCopy ? 'جاري الإنشاء...' : 'إنشاء رواتب الشهر القادم',
+                onClick: handleCopyToNextMonth,
+                disabled: loadingCopy,
+              },
+              { type: 'button', label: 'طباعة التقرير', onClick: printReport },
             ].map((btn, idx) =>
               btn.type === 'link' ? (
                 <Link
@@ -268,7 +494,9 @@ export default function PaymentsReport() {
                   onClick={btn.onClick}
                   disabled={btn.disabled}
                   className={`w-full sm:w-auto text-center px-4 py-2 text-sm font-semibold text-white ${
-                    btn.disabled ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 active:scale-95'
+                    btn.disabled
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-green-600 hover:bg-green-700 active:scale-95'
                   } transition rounded-lg shadow-md`}
                 >
                   {btn.label}
@@ -293,111 +521,142 @@ export default function PaymentsReport() {
             </div>
 
             {/* Table Wrapper */}
-            <div className="w-full overflow-x-auto">
-              <table className="min-w-[900px] w-full border-collapse border text-center text-sm">
-                <thead className="bg-gray-100 sticky top-0">
-                  <tr>
-                    {[
-                      'الاسم', 'الدرجة', 'المرحلة', 'الراتب',  'بدل الشهادة',
-                      'بدل الخطورة', 'بدل النقل',  'استقطاع التقاعد',
-                      'الاستحقاق', 'الاستقطاع', 'الصافي'
-                    ].map((head, idx) => (
-                      <th key={idx} className="border p-2 whitespace-nowrap font-bold">{head}</th>
-                    ))}
-                  </tr>
-                </thead>
+<div className="w-full overflow-x-auto">
+  <table className="min-w-[900px] w-full border-collapse border text-center text-sm">
+    <thead className="bg-gray-100 sticky top-0 border-b-2">
+      <tr>
+        {[
+          'الاسم',
+          'الدرجة',
+          'المرحلة',
+          'الراتب',
+          '% شهادة',
+          'م. شهادة',
+          '% خطورة',
+          'م. خطورة',
+          'م. النقل',
+          '% تقاعد',
+          'استقطاع التقاعد',
+          'الاستحقاق',
+          'الاستقطاع',
+          'الصافي',
+        ].map((header, index) => (
+          <th
+            key={index}
+            className="border p-2 whitespace-nowrap font-bold text-center"
+          >
+            {header}
+          </th>
+        ))}
+      </tr>
+    </thead>
+    <tbody>
+      {payments.map((p) => {
+        const salary = p.salary || 0;
+        const certPercent = p.certificate_percentage || 0;
+        const riskPercent = p.risk_percentage || 0;
+        const retirePercent = p.retire_percentage || 0;
 
-                <tbody>
-                  {payments.map((p) => {
-                    const salary = p.salary || 0;
-                    const cert = (salary * (p.certificate_percentage || 0)) / 100;
-                    const risk = (salary * (p.risk_percentage || 0)) / 100;
-                    const trans = p.trans_pay || 0;
-                    const retire = (salary * (p.retire_percentage || 0)) / 100;
+        const certPay = (salary * certPercent) / 100;
+        const riskPay = (salary * riskPercent) / 100;
+        const transPay = p.trans_pay || 0;
+        const retireCut = (salary * retirePercent) / 100;
 
-                    const totalNetCredits = (p.payments_entries || [])
-                      .filter(e => e.type === 'credit')
-                      .reduce((sum, e) => sum + (e.amount || 0), 0);
+        const totalNetCredits = (p.payments_entries || [])
+          .filter((e) => e.type === 'credit')
+          .reduce((sum, e) => sum + (e.amount || 0), 0);
 
-                    const totalNetDebits = (p.payments_entries || [])
-                      .filter(e => e.type === 'debit')
-                      .reduce((sum, e) => sum + (e.amount || 0), 0);
+        const totalNetDebits = (p.payments_entries || [])
+          .filter((e) => e.type === 'debit')
+          .reduce((sum, e) => sum + (e.amount || 0), 0);
 
-                    const credits = salary + cert + risk + trans + totalNetCredits;
-                    const debits = retire + totalNetDebits;
-                    const net = credits - debits;
+        const credits = salary + certPay + riskPay + transPay + totalNetCredits;
+        const debits = retireCut + totalNetDebits;
+        const net = credits - debits;
 
-                    return (
-                      <React.Fragment key={p.id}>
-                        <tr className="hover:bg-gray-50 cursor-pointer">
-                          <td className="border p-2 whitespace-nowrap">
-                            <button
-                              onClick={() => {
-                                setEditingPayment(p);
-                                setShowModal(true);
-                              }}
-                              className="text-blue-600 hover:underline bg-transparent border-0 p-0"
-                            >
-                              {p.employee?.first_name} {p.employee?.last_name}
-                            </button>
-                          </td>
-                          <td className="border p-2 whitespace-nowrap">{p.degree?.toLocaleString('ar-IQ') ?? ''}</td>
-                          <td className="border p-2 whitespace-nowrap">{p.level?.toLocaleString('ar-IQ') ?? ''}</td>
-                          <td className="border p-2 font-mono text-blue-900 font-extrabold whitespace-nowrap">
-                            {salary.toLocaleString('ar-IQ')}
-                          </td>
-                          <td className="border p-2 font-mono text-blue-900 font-extrabold whitespace-nowrap">
-                            {Number(cert.toFixed(0)).toLocaleString('ar-IQ')}
-                          </td>
-                          <td className="border p-2 font-mono text-blue-900 font-extrabold whitespace-nowrap">
-                            {Number(risk.toFixed(0)).toLocaleString('ar-IQ')}
-                          </td>
-                          <td className="border p-2 font-mono text-blue-900 font-extrabold whitespace-nowrap">
-                            {trans.toLocaleString('ar-IQ')}
-                          </td>
-                          <td className="border p-2 font-mono text-blue-900 font-extrabold whitespace-nowrap">
-                            {Number(retire.toFixed(0)).toLocaleString('ar-IQ')}
-                          </td>
-                          <td className="border p-2 font-mono text-blue-900 font-extrabold whitespace-nowrap">
-                            {Number(credits.toFixed(0)).toLocaleString('ar-IQ')}
-                          </td>
-                          <td className="border p-2 font-mono text-blue-900 font-extrabold whitespace-nowrap">
-                            {Number(debits.toFixed(0)).toLocaleString('ar-IQ')}
-                          </td>
-                          <td className="border p-2 font-bold font-mono text-blue-900 whitespace-nowrap">
-                            {Number(net.toFixed(0)).toLocaleString('ar-IQ')}
-                          </td>
-                        </tr>
+        return (
+          <React.Fragment key={p.id}>
+            <tr className="hover:bg-gray-50 cursor-pointer">
+              <td className="border p-1 whitespace-nowrap">
+                <button
+                  onClick={() => {
+                    setEditingPayment(p);
+                    setShowModal(true);
+                  }}
+                  className="text-blue-600 hover:underline bg-transparent border-0 p-0"
+                >
+                  {p.employee?.first_name} {p.employee?.last_name}
+                </button>
+              </td>
+              <td className="border p-1 whitespace-nowrap">{p.degree?.toLocaleString('ar-IQ') ?? ''}</td>
+              <td className="border p-1 whitespace-nowrap">{p.level?.toLocaleString('ar-IQ') ?? ''}</td>
+              <td className="border p-1 font-mono text-blue-900 font-extrabold whitespace-nowrap">
+                {salary.toLocaleString('ar-IQ')}
+              </td>
+              <td className="border p-1 whitespace-nowrap">
+                {Math.round(certPercent).toLocaleString('ar-IQ')} %
+              </td>
+              <td className="border p-1 font-mono text-blue-900 font-extrabold whitespace-nowrap">
+                {Math.round(certPay).toLocaleString('ar-IQ')}
+              </td>
+              <td className="border p-1 whitespace-nowrap">
+              {Math.round(riskPercent).toLocaleString('ar-IQ')}%
+              </td>
+              <td className="border p-1 font-mono text-blue-900 font-extrabold whitespace-nowrap">
+                {Math.round(riskPay).toLocaleString('ar-IQ')}
+              </td>
+              <td className="border p-1 font-mono text-blue-900 font-extrabold whitespace-nowrap">
+                {transPay.toLocaleString('ar-IQ')}
+              </td>
+              <td className="border p-1 whitespace-nowrap">
+                {Math.round(retirePercent).toLocaleString('ar-IQ')}%
+              </td>
+              <td className="border p-1 font-mono text-blue-900 font-extrabold whitespace-nowrap">
+                {Math.round(retireCut).toLocaleString('ar-IQ')}
+              </td>
+              <td className="border p-1 font-mono text-blue-900 font-extrabold whitespace-nowrap">
+                {Math.round(credits).toLocaleString('ar-IQ')}
+              </td>
+              <td className="border p-1 font-mono text-blue-900 font-extrabold whitespace-nowrap">
+                {Math.round(debits).toLocaleString('ar-IQ')}
+              </td>
+              <td className="border p-1 font-bold font-mono text-blue-900 whitespace-nowrap">
+                {Math.round(net).toLocaleString('ar-IQ')}
+              </td>
+            </tr>
 
-                        {(p.note || (p.payments_entries?.length ?? 0) > 0) && (
-                          <tr>
-                            <td colSpan={14} className="border p-2 text-xs text-right bg-gray-50">
-                              {p.payments_entries?.length > 0 && (
-                                <div className="mb-1">
-                                  {p.payments_entries.map((entry) =>
-                                    `• ${entry.title} / ${entry.amount.toLocaleString('ar-IQ')}`
-                                  ).join(' ؛ ')}
-                                </div>
-                              )}
-                              {p.note && <div>ملاحظة: {p.note}</div>}
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            {(p.note || (p.payments_entries?.length ?? 0) > 0) && (
+              <tr>
+                <td colSpan={14} className="border p-1 text-xs text-right bg-gray-50">
+                  {p.payments_entries?.length > 0 && (
+                    <div className="mb-1">
+                      {p.payments_entries
+                        .map((entry) => `• ${entry.title} / ${entry.amount.toLocaleString('ar-IQ')}`)
+                        .join(' ؛ ')}
+                    </div>
+                  )}
+                  {p.note && <div>ملاحظة: {p.note}</div>}
+                </td>
+              </tr>
+            )}
+          </React.Fragment>
+        );
+      })}
+    </tbody>
+  </table>
+</div>
+
+          
 
                 {/* Totals Summary */}
-                <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+                <div className="mt-6  grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 py-1">
                 {[
                     {
                     label: 'إجمالي الراتب',
                     value: payments.reduce((s, p) => s + (p.salary || 0), 0),
                     bg: 'bg-blue-100',
                     border: 'border-blue-300',
+                    padding: 'py-0 px-1',
                     },
                     {
                     label: 'إجمالي الاستحقاق',
@@ -413,6 +672,7 @@ export default function PaymentsReport() {
                     }, 0),
                     bg: 'bg-green-100',
                     border: 'border-green-300',
+                    padding: 'py-0 px-1',
                     },
                     {
                     label: 'إجمالي الاستقطاع',
@@ -426,6 +686,7 @@ export default function PaymentsReport() {
                     }, 0),
                     bg: 'bg-red-100',
                     border: 'border-red-300',
+                    padding: 'py-0 px-1',
                     },
                     {
                     label: 'الصافي الكلي',
@@ -447,28 +708,31 @@ export default function PaymentsReport() {
                     }, 0),
                     bg: 'bg-yellow-100',
                     border: 'border-yellow-300',
+                    padding: 'py-0 px-1',
                     },
-                ].map(({ label, value, bg, border }, idx) => (
+                  ].map(({ label, value, bg, border }, idx) => (
                     <div
-                    key={idx}
-                    className={`rounded-xl p-5 shadow font-[Cairo] text-center ${bg} ${border} border`}
+                      key={idx}
+                      className={`rounded-xl px-4 py-1 shadow font-[Cairo] text-center ${bg} ${border} border`}
                     >
-                    <div className="text-gray-700 font-semibold text-base mb-2">{label}</div>
-                    <div className="text-blue-900 font-extrabold text-2xl font-mono">
+                      <div className="text-gray-700 font-semibold text-sm mb-1">
+                        {label}
+                      </div>
+                      <div className="text-blue-900 font-extrabold text-xl font-mono">
                         {value.toLocaleString('ar-IQ')} د.ع
+                      </div>
                     </div>
-                    </div>
-                ))}
+                  ))}
                 </div>
 
                 {/* Employee Count */}
-                <div className="mt-6 rounded-xl p-5 shadow font-[Cairo] bg-indigo-50 border border-indigo-200 flex justify-center items-center gap-4">
+                <div className="mt-6 rounded-xl p-1 shadow font-[Cairo] bg-indigo-50 border border-indigo-200 flex justify-center items-center gap-4">
                 <span className="text-gray-700 font-semibold text-base">عدد الموظفين في التقرير:</span>
                 <span className="text-blue-900 font-extrabold text-2xl font-mono">{payments.length}</span>
                 </div>
 
                 {/* Committee Signature */}
-                <div className="mt-6 w-full bg-white rounded-xl shadow-md p-6 text-sm font-[Cairo]">
+                <div className="mt-10 w-full bg-white rounded-xl shadow-md p-6 text-sm font-[Cairo]">
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-8 text-center">
                     {['عضو', 'عضو', 'عضو', 'رئيس اللجنة'].map((role, idx) => (
                     <div key={idx} className="flex flex-col items-center">
@@ -476,13 +740,12 @@ export default function PaymentsReport() {
                         <input
                         type="text"
                         placeholder="الاسم"
-                        className="border-t-2 border-black w-full max-w-[280px] text-center text-lg font-semibold focus:outline-none focus:border-blue-500 transition"
+                        className="border-t-1 border-black w-full max-w-[300px] text-center text-sm font-semibold focus:outline-none focus:border-blue-500 transition"
                         />
                     </div>
                     ))}
                     </div>
                 </div>
-
           </div>
         ) : (
           <p className="text-center text-gray-600">لا توجد بيانات للعرض</p>
