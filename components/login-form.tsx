@@ -111,7 +111,8 @@ export function LoginForm({
             </p>
           </form>
         </CardContent>
-      </Card>
-    </div>
-  );
+        </Card>
+      </div>
+    );
+  }
   

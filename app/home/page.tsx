@@ -88,12 +88,12 @@ const fetcher = async (key: string) => {
         const trans = p.trans_pay || 0;
     
         const totalNetCredits = (p.payments_entries || [])
-          .filter(e => e.type === 'credit')
-          .reduce((sum2, e) => sum2 + (e.amount || 0), 0);
+          .filter((e: { id: number; type: string; amount: number }) => e.type === 'credit')
+          .reduce((sum2: number, e: { id: number; type: string; amount: number }) => sum2 + (e.amount || 0), 0);
     
         const totalNetDebits = (p.payments_entries || [])
-          .filter(e => e.type === 'debit')
-          .reduce((sum2, e) => sum2 + (e.amount || 0), 0);
+          .filter((e: { id: number; type: string; amount: number }) => e.type === 'debit')
+          .reduce((sum2: number, e: { id: number; type: string; amount: number }) => sum2 + (e.amount || 0), 0);
     
         const credits = s + cert + risk + trans + totalNetCredits;
         const debits = retire + totalNetDebits;
@@ -271,14 +271,32 @@ export default function HomePage() {
                   >
                     {darkMode ? "☀️ Light" : "🌙 Dark"}
                   </button>
-                  {user && (
-                    <button
-                      onClick={handleLogout}
-                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
-                    >
-                      تسجيل الخروج
-                    </button>
-                  )}
+                  <div className="flex gap-2 items-center">
+  {user ? (
+    <button
+      onClick={async () => {
+        const supabase = createClient();
+        await supabase.auth.signOut();
+        window.location.href = "/";
+      }}
+      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
+    >
+      تسجيل الخروج
+    </button>
+  ) : (
+    <button
+      onClick={() => {
+        window.location.href = "/auth/login";
+      }}
+      className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded"
+    >
+      تسجيل الدخول
+    </button>
+  )}
+</div>
+       
+                 
+
                 </div>
               </div>
 
@@ -289,10 +307,9 @@ export default function HomePage() {
                 تطبيقنا يسهل عليك إدارة الرواتب و الترقيات بسلاسة وأمان. كل ما تحتاجه في مكان واحد.
               </p>
               <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                <li>✔️ إدارة الموظفين بسهولة</li>
+
                 <li>✔️ حسابات دقيقة وسريعة للرواتب</li>
-                <li>✔️ تجربة استخدام آمنة</li>
-                <li>✔️ جمع بيانات الدوائر التابعة لدائرتك في مكان واحد</li>
+                <li>✔️ جمع بيانات الدوائر التابعة لدائرتك -ان وجدت - في مكان واحد</li>
                 <li>✔️ عملك من خلال الحاسوب او الهاتف بسهولة</li>
               </ul>
 

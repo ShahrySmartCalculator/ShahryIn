@@ -418,3 +418,4 @@ const NavButton = ({ href, label, color }: { href: string; label: string; color:
     {label}
   </Link>
 );
+
