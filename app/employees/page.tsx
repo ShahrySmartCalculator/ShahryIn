@@ -157,7 +157,7 @@ export default function AllEmployeesPage() {
         prev.map(emp => (emp.id === selectedEmployee.id ? updatedEmp : emp))
       );
   
-      alert('Employee data updated successfully!');
+      alert('تم تحديث البيامات بمجاح!');
     } else {
       // Insert case remains unchanged
       const { data, error } = await supabase
@@ -173,7 +173,7 @@ export default function AllEmployeesPage() {
   
       if (data) {
         setEmployees(prev => [...prev, data]);
-        alert('New employee added successfully!');
+        alert('تم اضافة الموظف بمجاح!');
       }
     }
   
