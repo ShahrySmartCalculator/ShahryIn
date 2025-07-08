@@ -272,37 +272,34 @@ export default function HomePage() {
                     {darkMode ? "☀️ Light" : "🌙 Dark"}
                   </button>
                   <div className="flex gap-2 items-center">
-  {user ? (
-    <button
-      onClick={async () => {
-        const supabase = createClient();
-        await supabase.auth.signOut();
-        window.location.href = "/";
-      }}
-      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
-    >
-      تسجيل الخروج
-    </button>
-  ) : (
-    <button
-      onClick={() => {
-        window.location.href = "/auth/login";
-      }}
-      className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded"
-    >
-      تسجيل الدخول
-    </button>
-  )}
-</div>
-       
-                 
-
+                    {user ? (
+                      <button
+                        onClick={async () => {
+                          const supabase = createClient();
+                          await supabase.auth.signOut();
+                          window.location.href = "/";
+                        }}
+                        className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
+                      >
+                        تسجيل الخروج
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          window.location.href = "/auth/login";
+                        }}
+                        className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded"
+                      >
+                        تسجيل الدخول
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <h1 className="text-3xl font-bold text-blue-800 dark:text-blue-400">مرحباً بك </h1>
-              <h1 className="text-3xl font-bold text-blue-800 dark:text-blue-400"> في نظام الرواتب </h1>
-              <h1 className="text-3xl font-bold text-blue-800 dark:text-blue-400">و الترقيات  </h1>
+              <h1 className="text-3xl font-bold text-blue-800 dark:text-blue-400">  مرحباً بك في نظام الرواتب والترقيات </h1>
+              {/* <h1 className="text-3xl font-bold text-blue-800 dark:text-blue-400"> في نظام الرواتب </h1> */}
+              {/* <h1 className="text-3xl font-bold text-blue-800 dark:text-blue-400">و الترقيات  </h1> */}
               <p className="text-base text-gray-700 dark:text-gray-300">
                 تطبيقنا يسهل عليك إدارة الرواتب و الترقيات بسلاسة وأمان. كل ما تحتاجه في مكان واحد.
               </p>
@@ -321,7 +318,7 @@ export default function HomePage() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-3 gap-4 mt-4">
+              <div className="grid grid-cols-3 gap-4 mt-3">
                 <DashboardCard title="عدد الموظفين" value={dashboardData?.employeeCount} color="blue" />
                 <DashboardCard title="رواتب الشهر السابق" value={dashboardData?.totalSalaryPrev} color="green" />
                 <DashboardCard title="رواتب الشهر الحالي" value={dashboardData?.totalSalaryCurrent} color="green" />
@@ -332,16 +329,23 @@ export default function HomePage() {
                 <NavButton href="/employees" label="الموظفين" color="blue" />
                 <NavButton href="/payments/report" label="الرواتب" color="green" />
                 <NavButton href="/promotions" label="الترقيات" color="red" />
-                <NavButton href="/contact_us" label="اتصل ينا" color="blue" />
+                {/* <NavButton href="/contact_us" label="اتصل ينا" color="blue" /> */}
               </div>
+              
+              {/*<div className="text-me dark:text-gray-400 mt-4 flex flex-row items-center justify-start gap-x-6">
+                <p>Address: Iraq - Najaf</p>
+                <p>Email: huseinaltae@gmail.com</p>
+                <p>Phone: 0787-0323-700</p>
+              </div> */}
+
             </motion.div>
 
             <motion.div
-  initial={{ x: 100, opacity: 0 }}
-  animate={{ x: 0, opacity: 1 }}
-  transition={{ duration: 0.6 }}
-  className="relative w-full md:w-1/2 h-64 md:h-auto min-h-[256px] overflow-hidden bg-gray-200 dark:bg-gray-700"
->
+              initial={{ x: 100, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ duration: 0.6 }}
+              className="relative w-full md:w-1/2 h-64 md:h-auto min-h-[256px] overflow-hidden bg-gray-200 dark:bg-gray-700"
+            >
 
               <AnimatePresence mode="wait">
                 <motion.div
@@ -396,7 +400,7 @@ const textColors: Record<Color, string> = {
 };
 
 const DashboardCard = ({ title, value, color }: { title: string; value: number | undefined; color: Color }) => (
-  <motion.div whileHover={{ scale: 1.05 }} className={`${bgColors[color]} p-4 rounded shadow`}>
+  <motion.div whileHover={{ scale: 1.05 }} className={`${bgColors[color]} p-1 rounded shadow`}>
     <p className={`text-sm ${textColors[color]}`}>{title}</p>
     <p className={`text-xl font-bold ${textColors[color]}`}>
       {value !== undefined ? value.toLocaleString() : "..."}
@@ -413,7 +417,7 @@ const navButtonBgColors: Record<Color, string> = {
 const NavButton = ({ href, label, color }: { href: string; label: string; color: Color }) => (
   <Link
     href={href}
-    className={`${navButtonBgColors[color]} text-white px-4 py-2 rounded transition text-center inline-block`}
+    className={`${navButtonBgColors[color]} text-white px-4 py-1 rounded transition text-center inline-block`}
   >
     {label}
   </Link>

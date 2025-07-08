@@ -64,7 +64,7 @@ const fetcher = async (key: string) => {
       let query = supabase
         .from("payments")
         .select(
-          "salary, certificate_percentage, risk_percentage, retire_percentage, trans_pay, net_credits, net_debits, payments_entries (id, type, amount)"
+          "salary, certificate_percentage, risk_percentage, retire_percentage, trans_pay, net_credits, net_debits"
         )
         .in("employee_id", employeeIds);
 
@@ -78,29 +78,16 @@ const fetcher = async (key: string) => {
     const prevPayments = await fetchPayments(previousMonthStart, previousMonthEnd);
     const currPayments = await fetchPayments(currentMonthStart);
 
-
     const calcNet = (payments: any[]) =>
       payments.reduce((sum, p) => {
         const s = p.salary || 0;
         const cert = (s * (p.certificate_percentage || 0)) / 100;
         const risk = (s * (p.risk_percentage || 0)) / 100;
         const retire = (s * (p.retire_percentage || 0)) / 100;
-        const trans = p.trans_pay || 0;
-    
-        const totalNetCredits = (p.payments_entries || [])
-          .filter((e: { id: number; type: string; amount: number }) => e.type === 'credit')
-          .reduce((sum2: number, e: { id: number; type: string; amount: number }) => sum2 + (e.amount || 0), 0);
-    
-        const totalNetDebits = (p.payments_entries || [])
-          .filter((e: { id: number; type: string; amount: number }) => e.type === 'debit')
-          .reduce((sum2: number, e: { id: number; type: string; amount: number }) => sum2 + (e.amount || 0), 0);
-    
-        const credits = s + cert + risk + trans + totalNetCredits;
-        const debits = retire + totalNetDebits;
-    
+        const credits = s + cert + risk + (p.trans_pay || 0) + (p.net_credits || 0);
+        const debits = retire + (p.net_debits || 0);
         return sum + (credits - debits);
       }, 0);
-    
 
     return {
       employeeCount: employeeIds.length,
@@ -108,7 +95,10 @@ const fetcher = async (key: string) => {
       totalSalaryCurrent: calcNet(currPayments),
     };
   }
-}
+
+  return null;
+};
+
 export default function HomePage() {
   const [font, setFont] = useState<"cairo" | "amiri">("cairo");
   const [darkMode, setDarkMode] = useState(false);
@@ -177,57 +167,30 @@ export default function HomePage() {
 
   const handleNewOffice = async (newOffice: any) => {
     const supabase = createClient();
-  
-    try {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-  
-      if (userError || !user) throw new Error("User not found");
-  
-      const { data: existing } = await supabase
-        .from("offices")
-        .select("id")
-        .eq("auth_user_id", user.id)
-        .single();
-  
-      if (existing) {
-        alert("لا يمكنك إضافة أكثر من دائرة واحدة.");
-        return;
-      }
-  
-      // Insert new office
-      const { error: insertError } = await supabase.from("offices").insert([
-        { ...newOffice, auth_user_id: user.id },
-      ]);
-  
-      if (insertError) {
-        console.error("Insert failed:", insertError.message);
-        alert("فشل في إضافة الدائرة: " + insertError.message);
-        return;
-      }
-  
-      setShowOfficeModal(false);
-  
-      // ✅ Try fetching the inserted office again
-      const { data: insertedOffice, error: fetchError } = await supabase
-        .from("offices")
-        .select("name")
-        .eq("auth_user_id", user.id)
-        .single();
-  
-      if (fetchError || !insertedOffice) {
-        console.warn("Office not found after insert");
-        return;
-      }
-  
-      setOfficeName(insertedOffice.name);
-    } catch (err) {
-      console.error("Error in handleNewOffice:", err);
+
+    // Check if user already has an office
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const { data: existing } = await supabase
+      .from("offices")
+      .select("id")
+      .eq("auth_user_id", user?.id)
+      .single();
+
+    if (existing) {
+      alert("لا يمكنك إضافة أكثر من دائرة واحدة.");
+      return;
     }
+
+    // Insert new office
+    await supabase.from("offices").insert([{ ...newOffice, auth_user_id: user?.id }]);
+    setShowOfficeModal(false);
+
+    const { data } = await supabase.from("offices").select("id, name").order("name");
+    setOfficeOptions(data || []);
+    setOfficeName(newOffice.name);
   };
-  
 
   return (
     <div className={`${fonts[font]} ${darkMode ? "dark" : ""}`}>
@@ -271,47 +234,25 @@ export default function HomePage() {
                   >
                     {darkMode ? "☀️ Light" : "🌙 Dark"}
                   </button>
-                  <div className="flex gap-2 items-center">
-  {user ? (
-    <button
-      onClick={async () => {
-        const supabase = createClient();
-        await supabase.auth.signOut();
-        window.location.href = "/";
-      }}
-      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
-    >
-      تسجيل الخروج
-    </button>
-  ) : (
-    <button
-      onClick={() => {
-        window.location.href = "/auth/login";
-      }}
-      className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded"
-    >
-      تسجيل الدخول
-    </button>
-  )}
-</div>
-       
-                 
-
+                  {user && (
+                    <button
+                      onClick={handleLogout}
+                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
+                    >
+                      تسجيل الخروج
+                    </button>
+                  )}
                 </div>
               </div>
-              <h1 className="text-3xl font-bold text-blue-800 dark:text-blue-400">  مرحباً بك في نظام الرواتب والترقيات </h1>
 
-              {/* <h1 className="text-3xl font-bold text-blue-800 dark:text-blue-400">مرحباً بك </h1> */}
-              {/* <h1 className="text-3xl font-bold text-blue-800 dark:text-blue-400"> في نظام الرواتب </h1> */}
-              {/* <h1 className="text-3xl font-bold text-blue-800 dark:text-blue-400">و الترقيات  </h1> */}
+              <h1 className="text-3xl font-bold text-blue-800 dark:text-blue-400">مرحباً بك في نظام الرواتب</h1>
               <p className="text-base text-gray-700 dark:text-gray-300">
-                تطبيقنا يسهل عليك إدارة الرواتب و الترقيات بسلاسة وأمان. كل ما تحتاجه في مكان واحد.
+                تطبيقنا يسهل عليك إدارة الرواتب والمدفوعات بسلاسة وأمان. كل ما تحتاجه في مكان واحد.
               </p>
               <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-
+                <li>✔️ إدارة الموظفين بسهولة</li>
                 <li>✔️ حسابات دقيقة وسريعة للرواتب</li>
-                <li>✔️ جمع بيانات الدوائر التابعة لدائرتك -ان وجدت - في مكان واحد</li>
-                <li>✔️ عملك من خلال الحاسوب او الهاتف بسهولة</li>
+                <li>✔️ تجربة استخدام آمنة</li>
               </ul>
 
               {user && <div className="text-sm text-gray-500 dark:text-gray-400">مرحباً، {user.email}</div>}
@@ -322,32 +263,25 @@ export default function HomePage() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-3 gap-4 mt-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                 <DashboardCard title="عدد الموظفين" value={dashboardData?.employeeCount} color="blue" />
                 <DashboardCard title="رواتب الشهر السابق" value={dashboardData?.totalSalaryPrev} color="green" />
                 <DashboardCard title="رواتب الشهر الحالي" value={dashboardData?.totalSalaryCurrent} color="green" />
               </div>
 
-
               <div className="flex flex-wrap gap-3 mt-6">
                 <NavButton href="/employees" label="الموظفين" color="blue" />
                 <NavButton href="/payments/report" label="الرواتب" color="green" />
                 <NavButton href="/promotions" label="الترقيات" color="red" />
-                {/* <NavButton href="/contact_us" label="اتصل ينا" color="blue" /> */}
               </div>
-             {/*} <div className="text-me dark:text-gray-400 mt-4 flex flex-row items-center justify-start gap-x-6">
-              <p>Address: Iraq - Najaf</p>
-              <p>Email: huseinaltae@gmail.com</p>
-              <p>Phone: 0787-0323-700</p>
-            </div> */}
-
             </motion.div>
+
             <motion.div
-                initial={{ x: 100, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ duration: 0.6 }}
-                className="relative w-full md:w-1/2 h-64 md:h-auto min-h-[256px] overflow-hidden bg-gray-200 dark:bg-gray-700"
-              >
+  initial={{ x: 100, opacity: 0 }}
+  animate={{ x: 0, opacity: 1 }}
+  transition={{ duration: 0.6 }}
+  className="relative w-full md:w-1/2 h-64 md:h-auto min-h-[256px] overflow-hidden bg-gray-200 dark:bg-gray-700"
+>
 
               <AnimatePresence mode="wait">
                 <motion.div
@@ -402,7 +336,7 @@ const textColors: Record<Color, string> = {
 };
 
 const DashboardCard = ({ title, value, color }: { title: string; value: number | undefined; color: Color }) => (
-  <motion.div whileHover={{ scale: 1.05 }} className={`${bgColors[color]} p-1 rounded shadow`}>
+  <motion.div whileHover={{ scale: 1.05 }} className={`${bgColors[color]} p-4 rounded shadow`}>
     <p className={`text-sm ${textColors[color]}`}>{title}</p>
     <p className={`text-xl font-bold ${textColors[color]}`}>
       {value !== undefined ? value.toLocaleString() : "..."}
@@ -419,7 +353,7 @@ const navButtonBgColors: Record<Color, string> = {
 const NavButton = ({ href, label, color }: { href: string; label: string; color: Color }) => (
   <Link
     href={href}
-    className={`${navButtonBgColors[color]} text-white px-4 py-1 rounded transition text-center inline-block`}
+    className={`${navButtonBgColors[color]} text-white px-4 py-2 rounded transition text-center inline-block`}
   >
     {label}
   </Link>
